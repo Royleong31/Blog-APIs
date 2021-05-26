@@ -4,6 +4,8 @@ const { validationResult } = require("express-validator");
 
 const Post = require("../models/post");
 const User = require("../models/user");
+const io = require("../socket");
+const user = require("../models/user");
 
 exports.getPosts = async (req, res, next) => {
   const currentPage = req.query.page || 1; // ?: default value is 1
@@ -15,6 +17,8 @@ exports.getPosts = async (req, res, next) => {
   try {
     const totalItems = await Post.find().countDocuments(); // ?: Count num of posts
     const posts = await Post.find() // ?: Only get the posts for this page
+      .populate("creator")
+      .sort({ createdAt: -1 }) // ?: Sorts such that the latest post comes first
       .skip((currentPage - 1) * perPage)
       .limit(perPage);
 
@@ -121,6 +125,19 @@ exports.createPost = (req, res, next) => {
       return user.save();
     })
     .then((result) => {
+      // ?: emit sends to all users. broadcast sends to all other users
+      io.getIO().emit("posts", {
+        // ?: Front end will listen to 'posts'
+        action: "create", // ?: Can send any js object, which front end will receive when they listen to posts
+        post: {
+          ...post._doc, // ?: Get the post document spread out
+          creator: {
+            _id: req.userId,
+            name: creator.name,
+          },
+        },
+      });
+
       res.status(201).json({
         message: "Successfully created post",
         post,
@@ -165,6 +182,7 @@ exports.updatePost = (req, res, next) => {
   const postId = req.params.postId;
 
   Post.findById(postId)
+    .populate("creator") // ?: Uses the reference that 'creator' has to get user data
     .then((post) => {
       if (!post) {
         const error = new Error("Could not find post");
@@ -172,7 +190,7 @@ exports.updatePost = (req, res, next) => {
         throw error;
       }
 
-      if (post.creator.toString() !== req.userId) {
+      if (post.creator._id.toString() !== req.userId) {
         const error = new Error("Not authorised");
         error.statusCode = 403;
         throw error;
@@ -188,8 +206,6 @@ exports.updatePost = (req, res, next) => {
         imageUrl = post.imageUrl;
       }
 
-      console.log(`Image Url 2: ${imageUrl}`);
-
       // ?: If the new image is not the same as the old image, delete the old image
       if (post.imageUrl !== imageUrl) {
         clearImage(post.imageUrl);
@@ -202,6 +218,11 @@ exports.updatePost = (req, res, next) => {
       return post.save();
     })
     .then((result) => {
+      io.getIO().emit("posts", {
+        action: "update",
+        post: result,
+      });
+
       res.status(200).json({
         message: "Post updated!",
         post: result,
@@ -239,6 +260,10 @@ exports.deletePost = (req, res, next) => {
       return user.save();
     })
     .then((result) => {
+      io.getIO().emit("posts", {
+        action: "delete",
+        post: postId,
+      });
       console.log(result);
       res.status(200).json({ message: "Deleted post." });
     })

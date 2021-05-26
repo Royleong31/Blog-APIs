@@ -35,7 +35,7 @@ const fileFilter = (req, file, cb) => {
 
 // app.use(bodyParser.urlencoded()); // ?: This is for parsing FORM data
 app.use(bodyParser.json()); // ?: This is for parsing json from APIs
-app.use(multer({ storage: fileStorage, fileFilter }).single('image')); // ?: single('image') comes in form from front end
+app.use(multer({ storage: fileStorage, fileFilter }).single("image")); // ?: single('image') comes in form from front end
 app.use("/images", express.static(path.join(__dirname, "images"))); // ?: images folder will be served statically for requests going to '/images'
 
 // ?: This will add these headers to all requests
@@ -70,7 +70,15 @@ mongoose
     useUnifiedTopology: true,
   })
   .then((result) => {
-    app.listen(8080);
+    const server = app.listen(8080);
+
+    // ?: This sets up the server with socket io
+    const io = require("./socket").init(server);
+
+    // ?: Listener for when a connection is established with client
+    io.on("connection", (socket) => {
+      console.log("Client connected");
+    });
   })
   .catch((err) => {
     console.error(err);
