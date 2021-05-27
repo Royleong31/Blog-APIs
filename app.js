@@ -5,9 +5,11 @@ const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
+const { graphqlHTTP } = require("express-graphql");
 
-const feedRoutes = require("./routes/feed");
-const authRoutes = require("./routes/auth");
+const graphqlSchema = require("./graphql/schema");
+const graphqlResolver = require("./graphql/resolvers");
+const auth = require("./middleware/auth");
 
 const app = express();
 
@@ -33,7 +35,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// app.use(bodyParser.urlencoded()); // ?: This is for parsing FORM data
+// app.use(bodyParser.urlencoded()); // ?: This is for parsing FORM data from webpages
 app.use(bodyParser.json()); // ?: This is for parsing json from APIs
 app.use(multer({ storage: fileStorage, fileFilter }).single("image")); // ?: single('image') comes in form from front end
 app.use("/images", express.static(path.join(__dirname, "images"))); // ?: images folder will be served statically for requests going to '/images'
@@ -47,12 +49,35 @@ app.use((req, res, next) => {
     "GET, POST, PUT, PATCH, DELETE"
   );
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization"); // !: Need to set header otherwise CORS error
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
   next();
 });
 
-// ?: Filters routes based on the params. Is done from top to bottom, so more specific routes on top.
-app.use("/feed", feedRoutes);
-app.use("/auth", authRoutes);
+// ?: Will run on every request that reaches the graphql endpoint (because it is above it)
+app.use(auth);  // !: May set isAuth to false, which can be handled in /graphql below
+
+app.use(
+  "/graphql",
+  graphqlHTTP({
+    schema: graphqlSchema,
+    rootValue: graphqlResolver,
+    graphiql: true, // ?: Creates a GUI that you can use to play around with the graphql API
+    formatError(err) {
+      if (!err.originalError) {
+        // ?: original errors are thrown (either by you or a package)
+        return err;
+      }
+      const data = err.originalError.data;
+      const message = err.message || "An error occurred";
+      const code = err.originalError.code || 500;
+      return { message, status: code, data };
+    },
+  })
+);
 
 // ?: Error Handling middleware (has 4 arguments). Uncaught errors come here
 app.use((err, req, res, next) => {
@@ -70,15 +95,7 @@ mongoose
     useUnifiedTopology: true,
   })
   .then((result) => {
-    const server = app.listen(8080);
-
-    // ?: This sets up the server with socket io
-    const io = require("./socket").init(server);
-
-    // ?: Listener for when a connection is established with client
-    io.on("connection", (socket) => {
-      console.log("Client connected");
-    });
+    app.listen(8080);
   })
   .catch((err) => {
     console.error(err);
