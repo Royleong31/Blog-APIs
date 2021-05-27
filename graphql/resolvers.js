@@ -52,14 +52,17 @@ module.exports = {
     // !: RMB to put ._doc: This removes the metadata
   },
 
+  // ?: first arg of the function is an args object that contains the parameters listed in the query (use destructuring to get them out)
   login: async function ({ email, password }) {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }); // ?: Find the user whose email matches the input
 
-    if (!user) {
+    if (!user) { // ?: Errors will be caught in app.js
       const error = new Error("User not found");
       error.code = 401;
       throw error;
     }
+
+    // TODO: Add validation
 
     const isEqual = await bcrypt.compare(password, user.password);
 
@@ -70,6 +73,7 @@ module.exports = {
     }
 
     // ?: Encrypts userId and email into jwt
+    // ?: Can use this to check auth status
     const token = jwt.sign(
       {
         userId: user._id.toString(),
@@ -126,8 +130,12 @@ module.exports = {
       creator: user, // ?: only stores user._id
     });
 
-    const createdPost = await post.save();
+    // ?: Don't need to populate as it was already in the post above
+    const createdPost = await post.save(); // ?: creator consists of the user data
 
+    console.log('Created Post');
+    console.log(createdPost);
+    
     user.posts.push(createdPost); // ?: Add post to user's posts array (only stores the post._id)
 
     await user.save();
@@ -238,6 +246,7 @@ module.exports = {
       throw error;
     }
 
+    // ?: find a post then populate it
     const post = await Post.findById(id).populate("creator");
     if (!post) {
       const error = new Error("No post found!");
@@ -286,5 +295,38 @@ module.exports = {
       console.error(error);
       return false;
     }
+  },
+
+  user: async function (args, req) {
+    if (!req.isAuth) {
+      const error = new Error("Not authenticated");
+      error.code = 401;
+      throw error;
+    }
+
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      const error = new Error("No user found");
+      error.code = 404;
+      throw error;
+    }
+
+    return { ...user._doc, _id: user._id.toString() };
+  },
+
+  updateStatus: async function ({ status }, req) {
+    if (!req.isAuth) {
+      const error = new Error("Not authenticated");
+      error.code = 401;
+      throw error;
+    }
+
+    const user = await User.findById(req.userId);
+    user.status = status;
+
+    await user.save();
+
+    return { ...user._doc, _id: user._id.toString() };
   },
 };

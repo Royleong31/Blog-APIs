@@ -1,6 +1,9 @@
 const { buildSchema } = require("graphql");
 
 // ?: The '!' mark in the schema indicates that it is a required field
+// ?: In graphql, you can query only what is necessary so we can return extra stuff in the resolvers
+
+// ? eg: to get user data in various parts of the front end, just query 1 endpoint to get all the user data. Front end can decide what to get in diff uses
 
 module.exports = buildSchema(`
   type Post {
@@ -49,12 +52,14 @@ module.exports = buildSchema(`
     createPost(postInput: PostInputData): Post!
     updatePost(id: ID!, postInput: PostInputData): Post!
     deletePost(id: ID!): Boolean!
+    updateStatus(status: String!): User!
   }
 
   type RootQuery {
     login(email: String!, password: String!): AuthData!
     posts(page: Int): PostData!
     post(id: ID!): Post!
+    user: User!
   }
 
   schema {

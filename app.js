@@ -75,14 +75,13 @@ app.put("/post-image", (req, res, next) => {
   }
 
   // ?: If user uploaded a file during updating, delete the old file
+  // ?: req.body only has oldPath when updating, not deleting
   if (req.body.oldPath) {
     console.log(`Old Path:`);
     console.log(req.body.oldPath);
     // ?: An old image path was passed with the request
-    clearImage(req.body.oldPath);
+    clearImage(req.body.oldPath); // ?: Delete the old image
   }
-
-  console.log(`Requested file path: ${req.file.path.replace("\\", "/")}`);
 
   return res.status(201).json({
     message: "File storage",
@@ -105,6 +104,7 @@ app.use(
       const data = err.originalError.data;
       const message = err.message || "An error occurred";
       const code = err.originalError.code || 500;
+      // ?: Data will end up in the errors field in the response object
       return { message, status: code, data };
     },
   })
