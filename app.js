@@ -1,5 +1,6 @@
 require("dotenv").config();
 const path = require("path");
+
 const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
@@ -10,6 +11,7 @@ const { graphqlHTTP } = require("express-graphql");
 const graphqlSchema = require("./graphql/schema");
 const graphqlResolver = require("./graphql/resolvers");
 const auth = require("./middleware/auth");
+const { clearImage } = require("./util/file");
 
 const app = express();
 
@@ -58,7 +60,35 @@ app.use((req, res, next) => {
 });
 
 // ?: Will run on every request that reaches the graphql endpoint (because it is above it)
-app.use(auth);  // !: May set isAuth to false, which can be handled in /graphql below
+app.use(auth); // !: May set isAuth to false, which can be handled in /graphql below
+
+app.put("/post-image", (req, res, next) => {
+  if (!req.isAuth) {
+    const error = new Error("Not authenticated");
+    error.code = 401;
+    throw error;
+  }
+
+  if (!req.file) {
+    return res.status(200).json({ message: "No file provided" }); // ?: Don't return an error as updating posts does not require a new file
+    // !: No filePath is sent
+  }
+
+  // ?: If user uploaded a file during updating, delete the old file
+  if (req.body.oldPath) {
+    console.log(`Old Path:`);
+    console.log(req.body.oldPath);
+    // ?: An old image path was passed with the request
+    clearImage(req.body.oldPath);
+  }
+
+  console.log(`Requested file path: ${req.file.path.replace("\\", "/")}`);
+
+  return res.status(201).json({
+    message: "File storage",
+    filePath: req.file.path.replace("\\", "/"),
+  });
+});
 
 app.use(
   "/graphql",
@@ -67,6 +97,7 @@ app.use(
     rootValue: graphqlResolver,
     graphiql: true, // ?: Creates a GUI that you can use to play around with the graphql API
     formatError(err) {
+      console.error(err);
       if (!err.originalError) {
         // ?: original errors are thrown (either by you or a package)
         return err;

@@ -25,7 +25,6 @@ module.exports = (req, res, next) => {
     req.isAuth = false;
     return next();
   }
-  console.log(decodedToken.userId);
 
   req.userId = decodedToken.userId; // ?: Stores the user's _id into the req object
   req.isAuth = true;
